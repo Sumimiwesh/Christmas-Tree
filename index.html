@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>🎄 Magical Hand-Tracking ASCII Christmas Tree ✨</title>
+  
+  <!-- 丸ゴシック系フォント (M PLUS Rounded 1c) & 等幅フォント (Space Mono) の読み込み -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* ==========================================================================
+       1. 基本スタイル & CSS変数 (カラーテーマ・フォント)
+       ========================================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    :root {
+      --bg-sky-top: #111a2e;
+      --bg-sky-bottom: #090e1a;
+      --accent-gold: #fde047;
+      --accent-red: #ef4444;
+      --accent-mint: #6ee7b7;
+      --accent-emerald: #10b981;
+      --accent-cyan: #38bdf8;
+      --accent-magenta: #ec4899;
+      --font-rounded: 'M PLUS Rounded 1c', sans-serif;
+      --font-mono: 'Space Mono', 'Courier New', monospace;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: var(--bg-sky-bottom);
+      color: #ffffff;
+      font-family: var(--font-rounded);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* アプリ全体レイアウト（上下分割コンテナ） */
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      position: relative;
+    }
+
+    /* ==========================================================================
+       2. 上部画面レイアウト（カメラ映像 + 骨格オーバーレイ: 約40%）
+       ========================================================================== */
+    #top-section {
+      height: 40%;
+      position: relative;
+      background: #090e1a;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+    }
+
+    /* カメラ映像（ミラー反転表示） */
+    #camera-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      opacity: 0.88;
+      filter: contrast(1.08) brightness(0.95);
+    }
+
+    /* 手の骨格線とドットを描画する Canvas */
+    #camera-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      transform: scaleX(-1); /* カメラ映像のミラーに合わせて左右反転 */
+    }
+
+    /* 上部タイトルバッジ */
+    .title-badge {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 6px 20px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+      z-index: 10;
+      white-space: nowrap;
+    }
+
+    /* 手が検出されていない時の案内表示（カメラ画面の下部に配置） */
+    #no-hands-guide {
+      position: absolute;
+      top: auto !important;
+      bottom: 14px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 7px 20px;
+      border-radius: 9999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+      animation: guidePulseBottom 2s ease-in-out infinite;
+      z-index: 8;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+      white-space: nowrap;
+    }
+
+    #no-hands-guide.hidden {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      animation: none !important;
+    }
+
+    @keyframes guidePulseBottom {
+      0%, 100% { transform: translateX(-50%) scale(1); }
+      50% { transform: translateX(-50%) scale(1.04); }
+    }
+
+    /* 検出中の手のジェスチャーインジケーター（上部左下） */
+    #current-gesture-indicator {
+      position: absolute;
+      bottom: 10px;
+      left: 14px;
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      padding: 5px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      font-size: 12px;
+      font-weight: 700;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    #current-gesture-indicator .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      transition: background-color 0.2s, box-shadow 0.2s;
+    }
+
+    /* ==========================================================================
+       3. ポップアップフィードバック（画面右上・0.8秒表示）
+       ========================================================================== */
+    #feedback-popup {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(245, 158, 11, 0.95));
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #ffffff;
+      padding: 8px 18px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 900;
+      box-shadow: 0 8px 25px rgba(239, 68, 68, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      transform: scale(0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    #feedback-popup.show {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    /* ==========================================================================
+       4. 下部画面レイアウト（星空 & ASCIIツリー: 約60%）
+       ========================================================================== */
+    #bottom-section {
+      height: 60%;
+      position: relative;
+      background: radial-gradient(circle at 50% 90%, var(--bg-sky-top) 0%, var(--bg-sky-bottom) 100%);
+      overflow: hidden;
+    }
+
+    /* ASCIIアートと星空を描画する Canvas */
+    #tree-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* 上部中央：ジェスチャー操作ヒントバー（下部セクション上部に配置） */
+    #gesture-hint-bar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      padding: 6px 18px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 10;
+      white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+    }
+
+    .hint-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .hint-item strong {
+      color: #e2e8f0;
+      font-weight: 800;
+    }
+
+    /* 左下：ステージ名バッジ & プログレスバー */
+    #stage-info-badge {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 8px 16px;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      z-index: 15;
+    }
+
+    #stage-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #f8fafc;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stage-progress-bar {
+      width: 130px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    #stage-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10b981, #fde047, #f43f5e);
+      border-radius: 9999px;
+      transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* 右下：リセットボタン */
+    #reset-btn {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      background: rgba(30, 41, 59, 0.88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 9px 18px;
+      border-radius: 14px;
+      font-family: var(--font-rounded);
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      transition: all 0.2s ease;
+      z-index: 15;
+    }
+
+    #reset-btn:hover {
+      background: rgba(51, 65, 85, 0.95);
+      color: #ffffff;
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    }
+
+    #reset-btn:active {
+      transform: translateY(0);
+    }
+
+    /* ==========================================================================
+       5. 初回起動モーダル & カメラ案内
+       ========================================================================== */
+    #start-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(3, 7, 18, 0.9);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .modal-card {
+      background: rgba(30, 41, 59, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 24px;
+      padding: 30px 24px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .modal-icon {
+      font-size: 48px;
+      animation: modalBounce 2s infinite ease-in-out;
+    }
+
+    @keyframes modalBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .modal-title {
+      font-size: 22px;
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1.3;
+      letter-spacing: 0.3px;
+    }
+
+    .modal-desc {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+
+    /* 2x2 ジェスチャー一覧表（新マッピング対応） */
+    .gesture-cheatsheet {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 14px 16px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+      text-align: left;
+      font-size: 11.5px;
+    }
+
+    .cheat-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+    .cheat-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    #start-camera-btn {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #ffffff;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 9999px;
+      font-family: var(--font-rounded);
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+      transition: all 0.2s ease;
+      width: 100%;
+      justify-content: center;
+    }
+
+    #start-camera-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(16, 185, 129, 0.5);
+      background: linear-gradient(135deg, #34d399, #10b981);
+    }
+
+    #start-camera-btn:active {
+      transform: translateY(0);
+    }
+
+    /* エラーメッセージ（カメラ拒否時など） */
+    #error-message {
+      display: none;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      color: #fca5a5;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      width: 100%;
+      text-align: center;
+    }
+
+    #demo-mode-btn {
+      display: none;
+      background: rgba(255, 255, 255, 0.12);
+      color: #f1f5f9;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 10px 20px;
+      border-radius: 9999px;
+      font-family: var(--font-rounded);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+    #demo-mode-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+    }
+
+    /* ローディングスピナー */
+    .spinner {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* レスポンシブ微調整 */
+    @media (max-width: 640px) {
+      #gesture-hint-bar {
+        display: none;
+      }
+      .title-badge {
+        font-size: 12px;
+        padding: 5px 16px;
+      }
+      #stage-info-badge {
+        padding: 6px 12px;
+      }
+      .stage-progress-bar {
+        width: 100px;
+      }
+      .gesture-cheatsheet {
+        font-size: 10.5px;
+        gap: 8px 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- ======================================================================
+         上部画面（約40%）：カメラ映像 + 手の骨格オーバーレイ
+         ====================================================================== -->
+    <section id="top-section" aria-label="カメラと手の骨格トラッキング">
+      <!-- タイトルバッジ -->
+      <div class="title-badge">Merry Christmas 🎄</div>
+
+      <!-- カメラ映像（ミラー表示） -->
+      <video id="camera-video" playsinline muted></video>
+      <!-- 骨格オーバーレイ用 Canvas -->
+      <canvas id="camera-canvas"></canvas>
+
+      <!-- 手が検出されていないときの案内表示 -->
+      <div id="no-hands-guide">👋 手をカメラにかざしてね！</div>
+
+      <!-- 現在のジェスチャー・手の状態インジケーター -->
+      <div id="current-gesture-indicator">
+        <span class="dot" id="gesture-dot"></span>
+        <span id="gesture-text">待機中</span>
+      </div>
+
+      <!-- 右上ポップアップフィードバック -->
+      <div id="feedback-popup">
+        <span id="feedback-icon">🎉</span>
+        <span id="feedback-msg">Nice!</span>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         下部画面（約60%）：星空の背景 + 参考画像準拠のASCIIツリー
+         ====================================================================== -->
+    <section id="bottom-section" aria-label="ASCIIアートクリスマスツリー">
+      <!-- 星空とASCIIツリーを描画するメインCanvas -->
+      <canvas id="tree-canvas"></canvas>
+
+      <!-- 上部中央：ジェスチャー操作ヒントバー -->
+      <div id="gesture-hint-bar">
+        <div class="hint-item"><span>✋✋</span> <strong>両手パー:</strong> キープで育成</div>
+        <div class="hint-item"><span>✌️</span> <strong>ピース:</strong> カラフル点滅＠</div>
+        <div class="hint-item"><span>🫶</span> <strong>ハート:</strong> 星点灯</div>
+        <div class="hint-item"><span>✊</span> <strong>ぐー:</strong> リセット</div>
+      </div>
+
+      <!-- 左下：現在のステージ名とプログレスバー -->
+      <div id="stage-info-badge">
+        <div id="stage-title">Stage 0/5: 初期状態</div>
+        <div class="stage-progress-bar">
+          <div id="stage-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- 右下：リセットボタン -->
+      <button id="reset-btn" type="button" title="ツリーを初期状態に戻す">
+        <span>🔄</span>
+        <span>リセット</span>
+      </button>
+    </section>
+
+    <!-- ======================================================================
+         初回アクセス時のモーダルダイアログ
+         ====================================================================== -->
+    <div id="start-modal">
+      <div class="modal-card">
+        <div class="modal-icon">🎄</div>
+        <h1 class="modal-title">Hand-Tracking<br>ASCII Christmas Tree</h1>
+        <p class="modal-desc">
+          カメラに手をかざしてジェスチャーをすると、<br>
+          文字の粒が集まってツリーが育っていきます！
+        </p>
+
+        <!-- 新ジェスチャー対応の2x2説明表 -->
+        <div class="gesture-cheatsheet">
+          <div class="cheat-row"><span class="cheat-icon">✋✋</span> <span>両手パー: キープでツリー育成</span></div>
+          <div class="cheat-row"><span class="cheat-icon">✌️</span> <span>ピース: カラフル点滅＠</span></div>
+          <div class="cheat-row"><span class="cheat-icon">🫶</span> <span>ハート: 星を点灯</span></div>
+          <div class="cheat-row"><span class="cheat-icon">✊</span> <span>ぐー: リセット</span></div>
+        </div>
+
+        <div id="error-message"></div>
+        <button id="demo-mode-btn" type="button">🎬 カメラなしでデモを体験する</button>
+
+        <button id="start-camera-btn" type="button">
+          <div class="spinner" id="loading-spinner"></div>
+          <span id="btn-text">カメラを起動してスタート 🎄</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       JavaScript メインロジック
+       ========================================================================== -->
+  <script type="module">
+    /* ==========================================================================
+       【1. 設定パラメータ (CONFIG)】
+       左右対称・全体均一グリーン（右側デザイン準拠）と規則正しいオーナメント
+       ========================================================================== */
+    const CONFIG = {
+      fontFamily: "'Space Mono', 'Courier New', monospace",
+      baseFontSize: 11,    // 基準文字サイズ (px)
+      charWidth: 7.2,      // 1文字の横幅 (px)
+      charHeight: 11.8,    // 1文字の縦幅 (px)
+
+      // 右側基準の統一感ある美しいグリーンパレット & 対称オーナメント
+      colors: {
+        scattered: '#334155',    // 初期状態（漂う文字）のダークスレート
+
+        // ツリー本体：全体を美しいリッチなクリスマスグリーンで統一（右側基準）
+        treeGreen1: '#10b981',   // 鮮やかなエメラルドグリーン
+        treeGreen2: '#059669',   // 深みのあるグリーン
+        treeGreen3: '#15803d',   // 濃いフォレストグリーン
+        treeGreen4: '#166534',   // ディープダークグリーン
+        treeFrill: '#34d399',    // 段のフリルアクセント
+
+        // トップスター（シャンパンゴールドの光芒）
+        topStar: '#fde047',
+        topStarCore: '#ffffff',
+        topStarGlow: 'rgba(253, 224, 71, 0.95)',
+        starRay: '#fef08a',
+
+        // 規則正しい左右対称のオーナメント（深紅のオーナメント）
+        ornament: '#ef4444',
+        ornamentGlow: 'rgba(239, 68, 68, 0.95)',
+
+        // カラフルライト（点滅）
+        lights: ['#38bdf8', '#ec4899', '#fde047', '#a855f7', '#f43f5e', '#06b6d4'],
+
+        // 幹（ウッドブラウン）
+        treeTrunk: '#78350f',
+        treeTrunkDark: '#451a03',
+
+        // 地面の雪面と金色の光の波紋
+        groundGold: '#fde047',
+        groundGoldDim: '#ca8a04',
+        groundSnow: '#e2e8f0'
+      },
+
+      starCount: 75,             // 背景の星の数
+      gestureCooldownMs: 900,    // ジェスチャー認識のクールダウン
+      feedbackDurationMs: 800    // フィードバック表示時間 (0.8秒)
+    };
+
+    // 新ステージ一覧
+    const STAGE_NAMES = [
+      "初期状態: 漂う文字たち",
+      "Stage 1/5: 幹と光の雪面",
+      "Stage 2/5: ツリー本体 (対称グリーン)",
+      "Stage 3/5: 対称オーナメント",
+      "Stage 4/5: トップスター",
+      "Stage 5/5: 光のガーランド",
+      "🎉 完成！ メリークリスマス 🎄"
+    ];
+
+    /* ==========================================================================
+       【2. ASCIIアート設計図 (完全左右対称・高密度グリーンツリー)】
+       幅 51文字 × 39行、中心列: 25
+       左と右が厳密に鏡像一致（回文対称）する設計
+       ========================================================================== */
+    const TREE_ASCII_TEMPLATE = [
+      "                         |                         ", // Row 0 (星縦光芒)
+      "                      \\ :###/ :                    ", // Row 1 (星上部)
+      "                   ----+##★##+----                 ", // Row 2 (星水平大十字光芒)
+      "                      : /###\\ :                    ", // Row 3 (星下部)
+      "                         |                         ", // Row 4 (星縦光芒)
+      "                        .888.                      ", // Row 5 (1段目頂点)
+      "                       8888888                     ", // Row 6
+      "                      888888888                    ", // Row 7
+      "                     88@88888@88                   ", // Row 8 (オーナメント 2個 対称)
+      "                    8888888888888                  ", // Row 9
+      "                   888888888888888                 ", // Row 10
+      "                  /^^^^^^^^^^^^^^^\\                ", // Row 11 (フリル 1)
+      "                     88888888888                   ", // Row 12 (2段目)
+      "                   888@8888888@888                 ", // Row 13 (オーナメント 2個 対称)
+      "                  88888888888888888                ", // Row 14
+      "                 88@8888888888888@88               ", // Row 15 (オーナメント 2個 対称)
+      "                888888888888888888888              ", // Row 16
+      "               88888888888888888888888             ", // Row 17
+      "              /^^^^^^^^^^^^^^^^^^^^^^^\\            ", // Row 18 (フリル 2)
+      "                  88888888888888888                ", // Row 19 (3段目)
+      "                8888@88888888888@8888              ", // Row 20 (オーナメント 2個 対称)
+      "               88888888888888888888888             ", // Row 21
+      "              888@88888888888888888@888            ", // Row 22 (オーナメント 2個 対称)
+      "             888888888888888888888888888           ", // Row 23
+      "            888888@888888888888888@888888          ", // Row 24 (オーナメント 2個 対称)
+      "           /^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\         ", // Row 25 (フリル 3)
+      "               8888888888888888888888888           ", // Row 26 (4段目)
+      "             88888@8888888888888888@88888          ", // Row 27 (オーナメント 2個 対称)
+      "            888888888888888888888888888888         ", // Row 28
+      "          8888@88888888888888888888888@8888        ", // Row 29 (オーナメント 2個 対称)
+      "         88888888888888888888888888888888888       ", // Row 30
+      "        888@88888888888888888888888888888@888      ", // Row 31 (オーナメント 2個 対称)
+      "       /^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\     ", // Row 32 (フリル 4 最下段)
+      "                      |#######|                    ", // Row 33 (幹)
+      "                ====  |#######|  ====              ", // Row 34 (幹 & 地面波紋)
+      "           ======     |#######|     ======         ", // Row 35 (地面波紋)
+      "      ========        |#######|        ========    ", // Row 36 (地面波紋)
+      "   =============================================== ", // Row 37 (金色の雪面)
+      "     =======    =======   ===   =======    ======= "  // Row 38 (金色の雪面)
+    ];
+
+    /* ==========================================================================
+       【3. アプリケーションの状態管理】
+       ========================================================================== */
+    const state = {
+      growthProgress: 0.0,        // 0.0 (未成長) 〜 1.0 (幹〜葉まで完全成長)
+      isBothOpenHeld: false,      // 両手パーが現在キープされているか
+      isKeyGrowing: false,        // Spaceキーまたはクリックで育成キープ中か
+      ornamentsActive: false,     // ピースでオーナメント点灯したか
+      starActive: false,          // ハートでトップスター点灯したか
+      lastTimestamp: 0,           // 毎フレームの経過時間(dt)計算用
+      lastGestureTime: 0,         // 最後にジェスチャーを発火した時刻
+      prevGesture: null,          // 直前の確定ポーズ
+      confirmedPose: null,
+      handsDetected: false,       // 手が検出されているか
+      particles: [],              // ASCII文字パーティクル
+      stars: [],                  // 背景の瞬く星たち
+      shootingStar: null,         // 流れ星
+      handLandmarker: null,       // MediaPipe HandLandmarker インスタンス
+      isCameraRunning: false,     // カメラ起動フラグ
+      isDemoMode: false,          // デモモードフラグ
+      feedbackTimeoutId: null     // ポップアップ消去用タイマー
+    };
+
+    /* ==========================================================================
+       【4. DOM要素の取得】
+       ========================================================================== */
+    const cameraVideo = document.getElementById('camera-video');
+    const cameraCanvas = document.getElementById('camera-canvas');
+    const cameraCtx = cameraCanvas.getContext('2d');
+
+    const treeCanvas = document.getElementById('tree-canvas');
+    const treeCtx = treeCanvas.getContext('2d');
+
+    const startModal = document.getElementById('start-modal');
+    const startCameraBtn = document.getElementById('start-camera-btn');
+    const demoModeBtn = document.getElementById('demo-mode-btn');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const btnText = document.getElementById('btn-text');
+    const errorMessage = document.getElementById('error-message');
+
+    const noHandsGuide = document.getElementById('no-hands-guide');
+    const gestureIndicatorText = document.getElementById('gesture-text');
+    const gestureDot = document.getElementById('gesture-dot');
+    const stageTitle = document.getElementById('stage-title');
+    const stageProgressFill = document.getElementById('stage-progress-fill');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const feedbackPopup = document.getElementById('feedback-popup');
+    const feedbackIcon = document.getElementById('feedback-icon');
+    const feedbackMsg = document.getElementById('feedback-msg');
+
+    /* ==========================================================================
+       【5. ASCII文字パーティクル & 背景星の初期化】
+       ========================================================================== */
+    function initASCIIAndStars() {
+      state.particles = [];
+      const numRows = TREE_ASCII_TEMPLATE.length;
+      const numCols = TREE_ASCII_TEMPLATE[0].length;
+      const centerCol = Math.floor(numCols / 2);
+
+      for (let r = 0; r < numRows; r++) {
+        const rowStr = TREE_ASCII_TEMPLATE[r];
+        for (let c = 0; c < rowStr.length; c++) {
+          const ch = rowStr[c];
+          if (ch === ' ') continue;
+
+          // 各パーティクルの属性設定
+          let type = 'tree';
+          let requiredProgress = 0.0;
+          let glow = null;
+          let color = CONFIG.colors.treeGreen1;
+
+          // 1. トップスター (Row 0〜4) -> ハートで点灯
+          if (r <= 4) {
+            type = 'star';
+            if (ch === '★' || ch === '#' || ch === '@') {
+              color = CONFIG.colors.topStarCore;
+              glow = CONFIG.colors.topStarGlow;
+            } else {
+              color = CONFIG.colors.topStar;
+            }
+          }
+          // 2. 規則正しい左右対称オーナメント ('@') -> ピースでカラフル点滅
+          else if (ch === '@') {
+            type = 'ornament';
+            color = CONFIG.colors.ornament;
+            glow = CONFIG.colors.ornamentGlow;
+          }
+          // 3. 幹と地面 (Row 33〜38) -> 両手パーキープで下から育つ
+          else if (r >= 33) {
+            type = (c >= 22 && c <= 28) ? 'trunk' : 'ground';
+            color = (type === 'trunk') ? CONFIG.colors.treeTrunk :
+                    ((r >= 37) ? CONFIG.colors.groundGold : CONFIG.colors.groundGoldDim);
+            // 幹と地面は全体の最初の 0.0〜0.15 で完成
+            requiredProgress = Math.max(0.0, (38 - r) / 33.0 * 0.85);
+          }
+          // 4. ツリー本体 (Row 5〜32) -> 両手パーキープで幹から緑の葉まで徐々に育つ
+          else {
+            type = 'tree';
+            // 下段(Row 32)から上段(Row 5)へ順次育つ
+            requiredProgress = Math.max(0.0, Math.min(1.0, (38 - r) / 33.0));
+
+            const dist = Math.abs(c - centerCol);
+            if (ch === '^' || ch === '/' || ch === '\\') {
+              color = CONFIG.colors.treeFrill;
+            } else {
+              const pattern = (r * 3 + dist * 5) % 4;
+              color = [
+                CONFIG.colors.treeGreen1,
+                CONFIG.colors.treeGreen2,
+                CONFIG.colors.treeGreen3,
+                CONFIG.colors.treeGreen4
+              ][pattern];
+            }
+          }
+
+          // 散らばっている時の文字
+          const scatterChars = ['・', '*', '+', '.', '`', '°'];
+          const scatterChar = scatterChars[Math.floor(Math.random() * scatterChars.length)];
+
+          const w = treeCanvas.width || 800;
+          const h = treeCanvas.height || 600;
+
+          state.particles.push({
+            char: ch,
+            scatterChar: scatterChar,
+            targetCol: c - centerCol,
+            targetRow: r,
+            requiredProgress: requiredProgress,
+            color: color,
+            glow: glow,
+            type: type,
+            // カラフル点滅オーナメント用プロパティ
+            blinkPhase: Math.random() * Math.PI * 2,
+            blinkSpeed: 0.007 + Math.random() * 0.008,
+            colorOffset: Math.floor(Math.random() * 8),
+            palette: ['#ef4444', '#38bdf8', '#fbbf24', '#ec4899', '#a855f7', '#10b981', '#f97316', '#ffffff'],
+            // 物理位置
+            x: Math.random() * w,
+            y: Math.random() * h,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: (Math.random() - 0.5) * 1.5,
+            floatAngle: Math.random() * Math.PI * 2,
+            floatSpeed: 0.015 + Math.random() * 0.02
+          });
+        }
+      }
+
+      // 背景の星
+      state.stars = [];
+      const w = treeCanvas.width || 800;
+      const h = treeCanvas.height || 600;
+      for (let i = 0; i < CONFIG.starCount; i++) {
+        state.stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          baseAlpha: Math.random() * 0.5 + 0.3,
+          twinkleSpeed: Math.random() * 0.03 + 0.015,
+          phase: Math.random() * Math.PI * 2,
+          char: Math.random() > 0.6 ? '+' : (Math.random() > 0.3 ? '✦' : '·')
+        });
+      }
+    }
+
+    /* ==========================================================================
+       【6. Canvasのリサイズ処理】
+       ========================================================================== */
+    function resizeCanvases() {
+      const topSection = document.getElementById('top-section');
+      const bottomSection = document.getElementById('bottom-section');
+      const dpr = window.devicePixelRatio || 1;
+
+      if (topSection) {
+        const topRect = topSection.getBoundingClientRect();
+        cameraCanvas.width = topRect.width * dpr;
+        cameraCanvas.height = topRect.height * dpr;
+        cameraCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      if (bottomSection) {
+        const bRect = bottomSection.getBoundingClientRect();
+        treeCanvas.width = bRect.width * dpr;
+        treeCanvas.height = bRect.height * dpr;
+        treeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+    }
+    window.addEventListener('resize', resizeCanvases);
+
+    /* ==========================================================================
+       【7. UI更新 & ポップアップフィードバック (新ジェスチャー仕様)】
+       ========================================================================== */
+    function showFeedback(icon, message) {
+      feedbackIcon.textContent = icon;
+      feedbackMsg.textContent = message;
+      feedbackPopup.classList.add('show');
+
+      if (state.feedbackTimeoutId) {
+        clearTimeout(state.feedbackTimeoutId);
+      }
+      state.feedbackTimeoutId = setTimeout(() => {
+        feedbackPopup.classList.remove('show');
+      }, CONFIG.feedbackDurationMs);
+    }
+
+    function updateGrowthUI() {
+      const percent = Math.round(state.growthProgress * 100);
+      stageProgressFill.style.width = `${percent}%`;
+
+      if (state.growthProgress === 0) {
+        stageTitle.textContent = "初期状態: 漂う文字たち";
+      } else if (state.growthProgress < 1.0) {
+        stageTitle.textContent = `ツリー育成中: ${percent}% 🌱`;
+      } else {
+        if (state.ornamentsActive && state.starActive) {
+          stageTitle.textContent = "🎉 完成！ メリークリスマス 🎄";
+        } else {
+          stageTitle.textContent = "ツリー完成！ ピースやハートで飾り付け ✨";
+        }
+      }
+    }
+    const updateStageUI = updateGrowthUI; // 互換用エイリアス
+
+    // 1. ピース：まばらに配置されたカラフル点滅オーナメントがつく
+    function triggerOrnamentStage() {
+      state.ornamentsActive = true;
+      updateGrowthUI();
+      showFeedback("🍎", "カラフル点滅オーナメント点灯！");
+    }
+
+    // 2. ハート：星点灯
+    function triggerStarStage() {
+      state.starActive = true;
+      updateGrowthUI();
+      showFeedback("⭐️", "トップスター点灯！");
+    }
+
+    // 3. ぐー：リセット
+    function resetTree() {
+      state.growthProgress = 0.0;
+      state.isBothOpenHeld = false;
+      state.isKeyGrowing = false;
+      state.ornamentsActive = false;
+      state.starActive = false;
+      updateGrowthUI();
+      showFeedback("🔄", "初期状態にリセット！");
+
+      // パーティクルがふわっと弾けて散らばる
+      state.particles.forEach(p => {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 6 + 2;
+        p.vx = Math.cos(angle) * speed;
+        p.vy = Math.sin(angle) * speed;
+      });
+    }
+
+    resetBtn.addEventListener('click', resetTree);
+
+    // キーボードショートカット（Spaceキープで育成、Pでオーナメント、Hで星、Rでリセット）
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        state.isKeyGrowing = true;
+      } else if (e.key === 'p' || e.key === 'P') {
+        triggerOrnamentStage();
+      } else if (e.key === 'h' || e.key === 'H') {
+        triggerStarStage();
+      } else if (e.key === 'r' || e.key === 'R') {
+        resetTree();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') {
+        state.isKeyGrowing = false;
+      }
+    });
+
+    // 画面タップ・長押しでも育成可能（スマホ・マウス向け）
+    treeCanvas.addEventListener('mousedown', () => { state.isKeyGrowing = true; });
+    window.addEventListener('mouseup', () => { state.isKeyGrowing = false; });
+    treeCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); state.isKeyGrowing = true; }, { passive: false });
+    window.addEventListener('touchend', () => { state.isKeyGrowing = false; });
+
+    /* ==========================================================================
+       【8. MediaPipe HandLandmarker の読み込み & カメラ起動】
+       ========================================================================== */
+    import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+    async function setupHandLandmarker() {
+      try {
+        btnText.textContent = "AIモデル読み込み中...";
+        loadingSpinner.style.display = "inline-block";
+
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+
+        state.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 2
+        });
+
+        btnText.textContent = "カメラ起動中...";
+        await startCameraStream();
+
+        startModal.style.display = "none";
+        state.isCameraRunning = true;
+        resizeCanvases();
+        initASCIIAndStars();
+        updateGrowthUI();
+        requestAnimationFrame(renderLoop);
+
+      } catch (err) {
+        console.error("Initialization Error:", err);
+        loadingSpinner.style.display = "none";
+        errorMessage.style.display = "block";
+        errorMessage.innerHTML = "<strong>カメラを許可してください 📷</strong><br>ブラウザのアドレスバーからカメラへのアクセスを許可してください。";
+        demoModeBtn.style.display = "block";
+        btnText.textContent = "もう一度試す 🔄";
+      }
+    }
+
+    function startDemoMode() {
+      startModal.style.display = "none";
+      state.isDemoMode = true;
+      state.isCameraRunning = true;
+      resizeCanvases();
+      initASCIIAndStars();
+      updateGrowthUI();
+      showFeedback("🎮", "デモモード開始！ 画面タップやSpaceキーで育ちます");
+      requestAnimationFrame(renderLoop);
+    }
+    demoModeBtn.addEventListener('click', startDemoMode);
+
+    treeCanvas.addEventListener('click', () => {
+      advanceStage();
+    });
+
+    async function startCameraStream() {
+      const constraints = {
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      cameraVideo.srcObject = stream;
+
+      return new Promise((resolve) => {
+        cameraVideo.onloadedmetadata = () => {
+          cameraVideo.play();
+          resolve();
+        };
+      });
+    }
+
+    startCameraBtn.addEventListener('click', () => {
+      setupHandLandmarker();
+    });
+
+    /* ==========================================================================
+       【9. 手のポーズ & 厳格なジェスチャー認識ロジック】
+       手のひらサイズで正規化し、指定ポーズ以外は厳密に「待機中」に維持。
+       連続フレーム一致（デバウンス）により通過ポーズでの誤反応を完全防止。
+       ========================================================================== */
+    // ポーズの安定化（デバウンス）用変数
+    let pendingPose = null;
+    let pendingPoseCount = 0;
+    const POSE_CONFIRM_FRAMES = 3; // 連続3フレーム（約60〜80ms）維持で確定
+
+    function analyzeSingleHand(lm) {
+      // 基準スケール: 手首(0)と中指MCP(9)の距離
+      const palmSize = Math.hypot(lm[9].x - lm[0].x, lm[9].y - lm[0].y);
+      if (palmSize < 0.035) return null; // 手が小さすぎる場合は除外
+
+      // 各指の「伸び」「曲がり」を判定
+      function isFingerExt(tipIdx, pipIdx, mcpIdx) {
+        const dTipMcp = Math.hypot(lm[tipIdx].x - lm[mcpIdx].x, lm[tipIdx].y - lm[mcpIdx].y);
+        const dPipMcp = Math.hypot(lm[pipIdx].x - lm[mcpIdx].x, lm[pipIdx].y - lm[mcpIdx].y);
+        const dTipWrist = Math.hypot(lm[tipIdx].x - lm[0].x, lm[tipIdx].y - lm[0].y);
+        const dPipWrist = Math.hypot(lm[pipIdx].x - lm[0].x, lm[pipIdx].y - lm[0].y);
+        // 指先がMCPから十分に伸び、手首からもPIPより遠い
+        return (dTipMcp > dPipMcp * 1.25) && (dTipWrist > dPipWrist * 1.1) && (dTipMcp > palmSize * 0.65);
+      }
+
+      function isFingerCurled(tipIdx, pipIdx, mcpIdx) {
+        const dTipMcp = Math.hypot(lm[tipIdx].x - lm[mcpIdx].x, lm[tipIdx].y - lm[mcpIdx].y);
+        const dTipWrist = Math.hypot(lm[tipIdx].x - lm[0].x, lm[tipIdx].y - lm[0].y);
+        const dPipWrist = Math.hypot(lm[pipIdx].x - lm[0].x, lm[pipIdx].y - lm[0].y);
+        // 指先が手のひらに折りたたまれ、手首に近い
+        return (dTipMcp < palmSize * 0.52) || (dTipWrist < dPipWrist * 1.02);
+      }
+
+      // 親指の判定
+      const dThumbTipPinkyMcp = Math.hypot(lm[4].x - lm[17].x, lm[4].y - lm[17].y);
+      const dThumbMcpPinkyMcp = Math.hypot(lm[2].x - lm[17].x, lm[2].y - lm[17].y);
+      const dThumbTipWrist = Math.hypot(lm[4].x - lm[0].x, lm[4].y - lm[0].y);
+      const thumbOpen = (dThumbTipPinkyMcp > dThumbMcpPinkyMcp * 1.15) && (dThumbTipWrist > palmSize * 0.8);
+      const thumbCurled = (dThumbTipPinkyMcp < dThumbMcpPinkyMcp * 1.05) || (dThumbTipWrist < palmSize * 0.72);
+
+      const indexExt = isFingerExt(8, 6, 5);
+      const indexCurled = isFingerCurled(8, 6, 5);
+
+      const middleExt = isFingerExt(12, 10, 9);
+      const middleCurled = isFingerCurled(12, 10, 9);
+
+      const ringExt = isFingerExt(16, 14, 13);
+      const ringCurled = isFingerCurled(16, 14, 13);
+
+      const pinkyExt = isFingerExt(20, 18, 17);
+      const pinkyCurled = isFingerCurled(20, 18, 17);
+
+      // 1. パー (Open): 4本指がすべて完全に伸びており、親指も開いている
+      const isOpen = indexExt && middleExt && ringExt && pinkyExt && thumbOpen;
+
+      // 2. ピース (Peace): 人差し指と中指だけが伸びており、薬指と小指は完全に折りたたまれ、指先が開いている
+      const vDistance = Math.hypot(lm[8].x - lm[12].x, lm[8].y - lm[12].y);
+      const isPeace = indexExt && middleExt && ringCurled && pinkyCurled && !isOpen && (vDistance > palmSize * 0.18);
+
+      // 3. ぐー (Fist): 4本指すべてが完全に折りたたまれており、伸びている指が1本もない
+      const isFist = indexCurled && middleCurled && ringCurled && pinkyCurled && !indexExt && !middleExt && !thumbOpen;
+
+      return {
+        palmSize,
+        isOpen,
+        isPeace,
+        isFist,
+        thumbOpen,
+        thumbCurled
+      };
+    }
+
+    function detectGestures(allLandmarks) {
+      const now = performance.now();
+      const numHands = allLandmarks.length;
+
+      if (numHands === 0) {
+        state.handsDetected = false;
+        state.isBothOpenHeld = false;
+        noHandsGuide.classList.remove('hidden');
+        gestureIndicatorText.textContent = "待機中";
+        gestureDot.style.background = "#64748b";
+        gestureDot.style.boxShadow = "none";
+        pendingPose = null;
+        pendingPoseCount = 0;
+        return;
+      }
+
+      state.handsDetected = true;
+      noHandsGuide.classList.add('hidden');
+
+      const handAnalyses = allLandmarks.map(analyzeSingleHand).filter(Boolean);
+      if (handAnalyses.length === 0) {
+        gestureIndicatorText.textContent = "待機中";
+        gestureDot.style.background = "#64748b";
+        gestureDot.style.boxShadow = "none";
+        return;
+      }
+
+      let detectedRawPose = null;
+
+      // 判定1: 【両手ハート】（星点灯）
+      // 手が厳密に2つあり、人差し指先端同士と親指先端同士が接近し、手首同士は離れている
+      if (numHands >= 2 && handAnalyses.length >= 2) {
+        const h1 = allLandmarks[0];
+        const h2 = allLandmarks[1];
+        const avgPalm = (handAnalyses[0].palmSize + handAnalyses[1].palmSize) / 2;
+
+        const dIndexTips = Math.hypot(h1[8].x - h2[8].x, h1[8].y - h2[8].y);
+        const dThumbTips = Math.hypot(h1[4].x - h2[4].x, h1[4].y - h2[4].y);
+        const dWrists = Math.hypot(h1[0].x - h2[0].x, h1[0].y - h2[0].y);
+
+        // ハートの幾何学条件: 指先同士が近接し、手首は離れ、人差し指が親指より上にある
+        if (dIndexTips < avgPalm * 0.55 && dThumbTips < avgPalm * 0.55 && dWrists > avgPalm * 0.8) {
+          if (h1[8].y < h1[4].y + 0.05 && h2[8].y < h2[4].y + 0.05) {
+            detectedRawPose = 'heart';
+          }
+        }
+      }
+
+      // 判定2: 【両手パー】（ツリーを育てる）
+      // 厳密に2つの手が存在し、両手ともに完全にパー（5本全指伸展）
+      if (!detectedRawPose && numHands >= 2 && handAnalyses.length >= 2) {
+        if (handAnalyses[0].isOpen && handAnalyses[1].isOpen) {
+          detectedRawPose = 'both_open';
+        }
+      }
+
+      // 判定3: 【ピース】（オーナメントがつく）
+      // ピースの形（人差し指・中指のみ伸展、薬指・小指屈曲、親指屈曲）
+      if (!detectedRawPose) {
+        const hasClearPeace = handAnalyses.some(h => h.isPeace);
+        if (hasClearPeace) {
+          detectedRawPose = 'peace';
+        }
+      }
+
+      // 判定4: 【ぐー】（リセット）
+      // 完全に握り込まれた拳（4指すべて屈曲、伸展指ゼロ）
+      if (!detectedRawPose) {
+        const hasClearFist = handAnalyses.some(h => h.isFist);
+        if (hasClearFist) {
+          detectedRawPose = 'fist';
+        }
+      }
+
+      // --- 連続フレーム一致（デバウンス処理） ---
+      if (detectedRawPose === pendingPose) {
+        pendingPoseCount++;
+      } else {
+        pendingPose = detectedRawPose;
+        pendingPoseCount = 1;
+      }
+
+      // 連続フレーム数が閾値に満たない場合は、ポーズ未確定（待機中を維持）
+      if (pendingPoseCount < POSE_CONFIRM_FRAMES) {
+        if (!state.confirmedPose) {
+          gestureIndicatorText.textContent = "待機中";
+          gestureDot.style.background = "#64748b";
+          gestureDot.style.boxShadow = "none";
+        }
+        return;
+      }
+
+      // 確定したポーズ
+      const confirmedPose = pendingPose;
+
+      if (!confirmedPose) {
+        // 指定の手の形以外は厳密に待機中
+        state.confirmedPose = null;
+        state.isBothOpenHeld = false;
+        gestureIndicatorText.textContent = "待機中";
+        gestureDot.style.background = "#64748b";
+        gestureDot.style.boxShadow = "none";
+        state.prevGesture = null;
+        return;
+      }
+
+      // 1. 【両手パー】（キープしている間ツリーが徐々に育つ）
+      if (confirmedPose === 'both_open') {
+        state.isBothOpenHeld = true;
+        gestureIndicatorText.textContent = state.growthProgress >= 1.0 ? "✋✋ 両手パー (完成！)" : "✋✋ 両手パー (育成中...)";
+        gestureDot.style.background = "#10b981";
+        gestureDot.style.boxShadow = "0 0 10px #10b981";
+      } else {
+        state.isBothOpenHeld = false;
+      }
+
+      // 2. 【ピース】（まばらに配置されたカラフル点滅オーナメントがつく）
+      if (confirmedPose === 'peace') {
+        gestureIndicatorText.textContent = "✌️ ピース (オーナメント)";
+        gestureDot.style.background = "#ef4444";
+        gestureDot.style.boxShadow = "0 0 10px #ef4444";
+        if (state.prevGesture !== 'peace') {
+          triggerOrnamentStage();
+        }
+      }
+      // 3. 【ハート】（星点灯）
+      else if (confirmedPose === 'heart') {
+        gestureIndicatorText.textContent = "🫶 ハート (星点灯)";
+        gestureDot.style.background = "#fde047";
+        gestureDot.style.boxShadow = "0 0 10px #fde047";
+        if (state.prevGesture !== 'heart') {
+          triggerStarStage();
+        }
+      }
+      // 4. 【ぐー】（リセット）
+      else if (confirmedPose === 'fist') {
+        gestureIndicatorText.textContent = "✊ ぐー (リセット)";
+        gestureDot.style.background = "#ef4444";
+        gestureDot.style.boxShadow = "0 0 10px #ef4444";
+        if (state.prevGesture !== 'fist') {
+          resetTree();
+        }
+      }
+
+      state.prevGesture = confirmedPose;
+      state.confirmedPose = confirmedPose;
+    }
+
+    /* ==========================================================================
+       【10. 手の骨格オーバーレイ描画 (上部Canvas)】
+       ========================================================================== */
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17]
+    ];
+
+    function drawHandSkeleton(allLandmarks, width, height) {
+      cameraCtx.clearRect(0, 0, width, height);
+
+      allLandmarks.forEach((landmarks) => {
+        // 白い骨格ライン
+        cameraCtx.beginPath();
+        cameraCtx.lineWidth = 2.5;
+        cameraCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        cameraCtx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+        cameraCtx.shadowBlur = 6;
+
+        HAND_CONNECTIONS.forEach(([i, j]) => {
+          const pt1 = landmarks[i];
+          const pt2 = landmarks[j];
+          cameraCtx.moveTo(pt1.x * width, pt1.y * height);
+          cameraCtx.lineTo(pt2.x * width, pt2.y * height);
+        });
+        cameraCtx.stroke();
+        cameraCtx.shadowBlur = 0;
+
+        // 関節ドット & 指先アクセント
+        landmarks.forEach((pt, idx) => {
+          const px = pt.x * width;
+          const py = pt.y * height;
+
+          cameraCtx.beginPath();
+          if (idx === 4 || idx === 8 || idx === 12 || idx === 16 || idx === 20) {
+            cameraCtx.arc(px, py, 5, 0, Math.PI * 2);
+            cameraCtx.fillStyle = '#10b981';
+            cameraCtx.shadowColor = '#10b981';
+            cameraCtx.shadowBlur = 8;
+          } else {
+            cameraCtx.arc(px, py, 3.5, 0, Math.PI * 2);
+            cameraCtx.fillStyle = '#ffffff';
+            cameraCtx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+            cameraCtx.shadowBlur = 4;
+          }
+          cameraCtx.fill();
+          cameraCtx.shadowBlur = 0;
+        });
+      });
+    }
+
+    /* ==========================================================================
+       【11. 星空 & 参考画像準拠のASCIIツリー描画 (下部Canvas)】
+       ========================================================================== */
+    function renderTreeCanvas(time) {
+      const rect = document.getElementById('bottom-section').getBoundingClientRect();
+      const width = rect.width;
+      const height = rect.height;
+
+      // 参考画像の深いネイビーの星空背景
+      treeCtx.fillStyle = '#090e1a';
+      treeCtx.fillRect(0, 0, width, height);
+
+      // 1. 瞬く星々の描画
+      state.stars.forEach(star => {
+        const alpha = star.baseAlpha + Math.sin(time * star.twinkleSpeed + star.phase) * 0.35;
+        const currentAlpha = Math.max(0.1, Math.min(1.0, alpha));
+
+        treeCtx.fillStyle = `rgba(255, 255, 255, ${currentAlpha})`;
+        treeCtx.font = `${CONFIG.baseFontSize * 0.85}px ${CONFIG.fontFamily}`;
+        treeCtx.fillText(star.char, star.x, star.y);
+      });
+
+      // 流れ星
+      if (!state.shootingStar && Math.random() < 0.008) {
+        state.shootingStar = {
+          x: Math.random() * width,
+          y: Math.random() * (height * 0.35),
+          vx: -(Math.random() * 4 + 4),
+          vy: Math.random() * 2 + 1,
+          life: 30,
+          maxLife: 30
+        };
+      }
+      if (state.shootingStar) {
+        const ss = state.shootingStar;
+        treeCtx.strokeStyle = `rgba(255, 255, 255, ${ss.life / ss.maxLife})`;
+        treeCtx.lineWidth = 1.5;
+        treeCtx.beginPath();
+        treeCtx.moveTo(ss.x, ss.y);
+        treeCtx.lineTo(ss.x - ss.vx * 3, ss.y - ss.vy * 3);
+        treeCtx.stroke();
+        ss.x += ss.vx;
+        ss.y += ss.vy;
+        ss.life--;
+        if (ss.life <= 0) state.shootingStar = null;
+      }
+
+      // 2. ツリー基準座標の計算
+      const centerX = width / 2;
+      const numRows = TREE_ASCII_TEMPLATE.length;
+      const treeTotalHeight = numRows * CONFIG.charHeight;
+      // ヒントバー（上部）とステータスバー（下部）の間に美しく中央配置
+      const startY = Math.max(42, (height - treeTotalHeight) * 0.48);
+
+      // 前フレームからの経過時間 (dt)
+      const dt = state.lastTimestamp ? Math.min(100, time - state.lastTimestamp) : 16;
+      state.lastTimestamp = time;
+
+      // 仕様1: 両手パーをキープ（またはSpace長押し）している間、ツリーが徐々に育つ！
+      const isGrowing = state.isBothOpenHeld || state.isKeyGrowing;
+      if (isGrowing && state.growthProgress < 1.0) {
+        const prevP = state.growthProgress;
+        // 約2.8秒間キープで幹から緑の葉まで100%完成
+        state.growthProgress = Math.min(1.0, state.growthProgress + (dt / 2800));
+        updateGrowthUI();
+
+        if (prevP < 1.0 && state.growthProgress >= 1.0) {
+          showFeedback("🎉", "ツリー完成！ ピースで飾り付けしよう ✨");
+        }
+      }
+
+      // 3. 各パーティクルの描画
+      treeCtx.font = `bold ${CONFIG.baseFontSize}px ${CONFIG.fontFamily}`;
+      treeCtx.textAlign = 'center';
+      treeCtx.textBaseline = 'middle';
+
+      state.particles.forEach(p => {
+        let canAssemble = false;
+
+        if (p.type === 'star') {
+          // ハートで点灯
+          canAssemble = state.starActive;
+        } else if (p.type === 'ornament') {
+          // 仕様2: ピースでオーナメント点灯
+          canAssemble = state.ornamentsActive;
+        } else {
+          // 幹・地面・緑のもみの木本体: 両手パーキープで下から上へ徐々に吸着
+          canAssemble = state.growthProgress >= p.requiredProgress;
+        }
+
+        if (canAssemble) {
+          const targetX = centerX + p.targetCol * CONFIG.charWidth;
+          const targetY = startY + p.targetRow * CONFIG.charHeight;
+
+          // スプリング物理で定位置へ滑らかに吸着
+          const dx = targetX - p.x;
+          const dy = targetY - p.y;
+          p.vx = (p.vx + dx * 0.09) * 0.72;
+          p.vy = (p.vy + dy * 0.09) * 0.72;
+          p.x += p.vx;
+          p.y += p.vy;
+
+          let drawColor = p.color;
+
+          // 仕様2: まばらに配置された、いろんな色に点滅するオーナメント ('@')
+          if (p.type === 'ornament') {
+            const blinkCycle = Math.sin(time * p.blinkSpeed + p.blinkPhase);
+            const colorIdx = (p.colorOffset + Math.floor(time * 0.003 + p.blinkPhase)) % p.palette.length;
+            drawColor = p.palette[colorIdx];
+
+            const glowIntensity = 8 + 8 * Math.abs(blinkCycle);
+            treeCtx.shadowColor = drawColor;
+            treeCtx.shadowBlur = glowIntensity;
+            treeCtx.font = `bold ${CONFIG.baseFontSize * 1.35}px ${CONFIG.fontFamily}`;
+          }
+          // トップスターの輝き（大十字光芒）
+          else if (p.type === 'star') {
+            treeCtx.shadowColor = CONFIG.colors.topStarGlow;
+            treeCtx.shadowBlur = 18 + Math.sin(time * 0.008) * 8;
+            if (p.char === '★') {
+              treeCtx.font = `bold ${CONFIG.baseFontSize * 1.5}px ${CONFIG.fontFamily}`;
+            }
+          }
+          else if (p.glow) {
+            treeCtx.shadowColor = p.glow;
+            treeCtx.shadowBlur = 6;
+          }
+
+          treeCtx.fillStyle = drawColor;
+          treeCtx.fillText(p.char, p.x, p.y);
+
+          // フォントとシャドウをリセット
+          if (p.type === 'star' || p.type === 'ornament') {
+            treeCtx.font = `bold ${CONFIG.baseFontSize}px ${CONFIG.fontFamily}`;
+          }
+          treeCtx.shadowBlur = 0;
+
+        } else {
+          // 初期状態または未到達ステージ：ゆらゆら漂う文字粒子
+          p.floatAngle += p.floatSpeed;
+          p.x += Math.cos(p.floatAngle) * 0.6 + p.vx;
+          p.y += Math.sin(p.floatAngle) * 0.6 + p.vy;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
+
+          if (p.x < 10) p.x = width - 10;
+          if (p.x > width - 10) p.x = 10;
+          if (p.y < 10) p.y = height - 10;
+          if (p.y > height - 10) p.y = 10;
+
+          treeCtx.fillStyle = CONFIG.colors.scattered;
+          treeCtx.fillText(p.scatterChar, p.x, p.y);
+        }
+      });
+    }
+
+    /* ==========================================================================
+       【12. メインレンダリングループ (requestAnimationFrame)】
+       ========================================================================== */
+    let lastVideoTime = -1;
+
+    // デモ用ダミーハンド骨格生成
+    function createDemoHandLandmarks(time, handIdx) {
+      const offsetX = handIdx === 0 ? 0.35 : 0.65;
+      const wave = Math.sin(time * 0.003 + handIdx * 2) * 0.04;
+      const baseY = 0.55 + wave;
+
+      const wrist = { x: offsetX, y: baseY + 0.25, z: 0 };
+      const mcp5 = { x: offsetX - 0.08, y: baseY, z: 0 };
+      const mcp9 = { x: offsetX - 0.03, y: baseY - 0.02, z: 0 };
+      const mcp13 = { x: offsetX + 0.03, y: baseY - 0.01, z: 0 };
+      const mcp17 = { x: offsetX + 0.08, y: baseY + 0.02, z: 0 };
+
+      const lm = new Array(21);
+      lm[0] = wrist;
+      lm[1] = { x: offsetX - 0.05, y: baseY + 0.15, z: 0 };
+      lm[2] = { x: offsetX - 0.10, y: baseY + 0.10, z: 0 };
+      lm[3] = { x: offsetX - 0.13, y: baseY + 0.05, z: 0 };
+      lm[4] = { x: offsetX - 0.16, y: baseY, z: 0 };
+      lm[5] = mcp5;
+      lm[6] = { x: offsetX - 0.09, y: baseY - 0.08, z: 0 };
+      lm[7] = { x: offsetX - 0.10, y: baseY - 0.15, z: 0 };
+      lm[8] = { x: offsetX - 0.11, y: baseY - 0.22, z: 0 };
+      lm[9] = mcp9;
+      lm[10] = { x: offsetX - 0.03, y: baseY - 0.10, z: 0 };
+      lm[11] = { x: offsetX - 0.03, y: baseY - 0.18, z: 0 };
+      lm[12] = { x: offsetX - 0.03, y: baseY - 0.26, z: 0 };
+      lm[13] = mcp13;
+      lm[14] = { x: offsetX + 0.03, y: baseY - 0.08, z: 0 };
+      lm[15] = { x: offsetX + 0.04, y: baseY - 0.16, z: 0 };
+      lm[16] = { x: offsetX + 0.05, y: baseY - 0.23, z: 0 };
+      lm[17] = mcp17;
+      lm[18] = { x: offsetX + 0.09, y: baseY - 0.06, z: 0 };
+      lm[19] = { x: offsetX + 0.11, y: baseY - 0.12, z: 0 };
+      lm[20] = { x: offsetX + 0.13, y: baseY - 0.18, z: 0 };
+
+      return lm;
+    }
+
+    function renderLoop(timestamp) {
+      if (!state.isCameraRunning) return;
+
+      const topRect = document.getElementById('top-section').getBoundingClientRect();
+
+      // 1. デモモード
+      if (state.isDemoMode) {
+        const dummyHands = [
+          createDemoHandLandmarks(timestamp, 0),
+          createDemoHandLandmarks(timestamp, 1)
+        ];
+        drawHandSkeleton(dummyHands, topRect.width, topRect.height);
+        gestureIndicatorText.textContent = "🎮 デモ操作中 (Space/Clickで育成)";
+        gestureDot.style.background = "#38bdf8";
+        gestureDot.style.boxShadow = "0 0 8px #38bdf8";
+        noHandsGuide.classList.add('hidden');
+      }
+      // 2. カメラハンドトラッキング
+      else if (state.handLandmarker && cameraVideo.currentTime !== lastVideoTime && cameraVideo.readyState >= 2) {
+        lastVideoTime = cameraVideo.currentTime;
+        const results = state.handLandmarker.detectForVideo(cameraVideo, timestamp);
+
+        if (results && results.landmarks) {
+          detectGestures(results.landmarks);
+          drawHandSkeleton(results.landmarks, topRect.width, topRect.height);
+        } else {
+          detectGestures([]);
+          cameraCtx.clearRect(0, 0, topRect.width, topRect.height);
+        }
+      }
+
+      // 3. 下部星空 & ASCIIツリー描画
+      renderTreeCanvas(timestamp);
+
+      requestAnimationFrame(renderLoop);
+    }
+  </script>
+</body>
+</html>
