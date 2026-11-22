@@ -571,7 +571,7 @@
       <!-- 上部中央：ジェスチャー操作ヒントバー -->
       <div id="gesture-hint-bar">
         <div class="hint-item"><span>✋✋</span> <strong>両手パー:</strong> キープで育成</div>
-        <div class="hint-item"><span>✌️</span> <strong>ピース:</strong> カラフル点滅＠</div>
+        <div class="hint-item"><span>✌️</span> <strong>ピース:</strong> オーナメント</div>
         <div class="hint-item"><span>🫶</span> <strong>ハート:</strong> 星点灯</div>
         <div class="hint-item"><span>✊</span> <strong>ぐー:</strong> リセット</div>
       </div>
@@ -606,7 +606,7 @@
         <!-- 新ジェスチャー対応の2x2説明表 -->
         <div class="gesture-cheatsheet">
           <div class="cheat-row"><span class="cheat-icon">✋✋</span> <span>両手パー: キープでツリー育成</span></div>
-          <div class="cheat-row"><span class="cheat-icon">✌️</span> <span>ピース: カラフル点滅＠</span></div>
+          <div class="cheat-row"><span class="cheat-icon">✌️</span> <span>ピース: オーナメント</span></div>
           <div class="cheat-row"><span class="cheat-icon">🫶</span> <span>ハート: 星を点灯</span></div>
           <div class="cheat-row"><span class="cheat-icon">✊</span> <span>ぐー: リセット</span></div>
         </div>
@@ -955,11 +955,11 @@
     }
     const updateStageUI = updateGrowthUI; // 互換用エイリアス
 
-    // 1. ピース：まばらに配置されたカラフル点滅オーナメントがつく
+    // 1. ピース：まばらに配置されたオーナメントがつく
     function triggerOrnamentStage() {
       state.ornamentsActive = true;
       updateGrowthUI();
-      showFeedback("🍎", "カラフル点滅オーナメント点灯！");
+      showFeedback("🍎", "オーナメント点灯！");
     }
 
     // 2. ハート：星点灯
